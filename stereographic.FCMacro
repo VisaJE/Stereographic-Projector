@@ -1,0 +1,126 @@
+import Part, FreeCAD, math, Mesh, BuildRegularGeoms
+from math import sqrt
+from FreeCAD import Base
+
+def mean_point(points):
+	p = [0,0,0]
+	for point in points:
+		for i in range(3):
+			p[i] += point[i] / len(points)
+	return p
+
+""" Stereographic projection. z is the z-coordinate of the image plane.
+*  r is the y-coordinate of the projection point,
+*  dr is defined by R = dr + r, where R is the radius of the sphere
+"""
+def project(points, r, z, dr=0):
+	vecs=[]
+	if (dr == 0):
+		for p in points:
+			a = 2 * r * (r - z) /((r - z)**2 + p[0]**2 + p[1]**2)
+			vecs.append(
+				Base.Vector(p[0] * a ,
+							p[1] * a,
+							r - (r - z)*a
+				)
+			)
+	else:
+		r1 = r + dr
+		for p in points:
+			a = (r * (r - z) + sqrt(r**2 * (r-z)**2 - (r**2-r1**2) * (p[0]**2 + p[1]**2 + (r-z)**2)))/((r - z)**2 + p[0]**2 + p[1]**2)
+			vecs.append(
+				Base.Vector(p[0] * a ,
+							p[1] * a,
+							r - (r - z)*a
+				)
+			)
+	return vecs
+
+def project_and_meshify_polygon(polygon, r_in, z_plane, r_out):
+	inner_projected = project(polygon, r_in, z_plane)
+	n = len(inner_projected)
+	outer_projected = project(polygon, r_in, z_plane, r_out - r_in)
+	triangles = []
+	# mi = mean_point(inner_projected)
+	#for i in range(n):
+	#	triangles.append([inner_projected[i], inner_projected[(i + 1) % n], mi])
+	#mi = mean_point(outer_projected)
+	#for i in range(len(outer_projected)):
+	#	triangles.append([outer_projected[i], outer_projected[(i + 1) % n], mi])
+
+	for i in range(n):
+		triangles.append([inner_projected[i], outer_projected[i], inner_projected[(i + 1) % n]])
+		triangles.append([inner_projected[i], outer_projected[i], outer_projected[(i + n - 1) % n]])
+	return triangles
+
+def project_and_meshify_polygon_smart(polygon, r_in, origo, size=2):
+	n = len(polygon)
+	triangles = []
+	mi = mean_point(polygon)
+	for i in range(n):
+		# triangles.append([polygon[i], mi, polygon[(i + 1) % n]]) # Bottom of the pyramid
+		triangles.append([polygon[i], origo, polygon[(i + 1) % n]]) # Sides
+	return triangles
+
+def carve_hole(mesh, ball):
+	shape = Part.Shape()
+	shape.makeShapeFromMesh(mesh.Topology,0.05) # the second arg is the tolerance for sewing
+	solid = Part.makeSolid(shape)
+	# Part.show(solid)
+	return ball.cut(solid)
+
+def make_sphere(size=1, thickness=0.05, opening_r=0.5):
+	outer_part = Part.makeSphere(size + thickness)
+	inner = Part.makeSphere(size)
+	outer_part = outer_part.cut(inner)
+	cylinder = Part.makeCylinder(opening_r, 2*size)
+	outer_part = outer_part.cut(cylinder)
+	return outer_part
+
+r = 60
+projection_mesh_r=2 * r
+ball = make_sphere(r, 1.5, 20)
+ballo = make_sphere(0, r + 1.5, 0)
+origo = [0,0,r]
+
+import pickle
+import numpy as np
+with open("/path/to/contours.dat", 'rb') as f:
+	contours = pickle.load(f)
+
+translate = [-1100,-700]
+scale = 0.6
+
+for i in range(len(contours)):
+	contours[i] = contours[i].astype(float)
+	print(contours[i].shape)
+	for c in contours[i]:
+		for s in c:
+			s[0] += translate[0]
+			s[1] += translate[1]
+	contours[i] *= scale
+
+if True:
+	for thing in contours:
+		thing = np.squeeze(thing, 1)
+		asd = []
+		for i in range(thing.shape[0]):
+			asd.append([thing[i][0], thing[i][1], -r])
+
+		mesh = Mesh.Mesh(project_and_meshify_polygon(thing, 0.95*r, -r, projection_mesh_r))
+		ball = carve_hole(mesh, ball)
+
+if True:
+	for thing in contours:
+		thing = np.squeeze(thing, 1)
+		asd = []
+		for i in range(thing.shape[0]):
+			asd.append(Base.Vector(thing[i][0], thing[i][1], -r))
+		shape = Part.makePolygon(asd)
+		Part.show(shape)
+
+triangle = [[-5, -3], [-3, -5], [-3, -3]]
+ # mesh = Mesh.Mesh(project_and_meshify_polygon(triangle, r))
+ # ball = carve_hole(mesh, ball)
+Part.show(ball)
+Part.show(ballo)
