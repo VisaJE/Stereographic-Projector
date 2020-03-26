@@ -2,12 +2,6 @@ import Part, FreeCAD, math, Mesh, BuildRegularGeoms
 from math import sqrt
 from FreeCAD import Base
 
-def mean_point(points):
-	p = [0,0,0]
-	for point in points:
-		for i in range(3):
-			p[i] += point[i] / len(points)
-	return p
 
 """ Stereographic projection. z is the z-coordinate of the image plane.
 *  r is the y-coordinate of the projection point,
@@ -41,26 +35,11 @@ def project_and_meshify_polygon(polygon, r_in, z_plane, r_out):
 	n = len(inner_projected)
 	outer_projected = project(polygon, r_in, z_plane, r_out - r_in)
 	triangles = []
-	# mi = mean_point(inner_projected)
-	#for i in range(n):
-	#	triangles.append([inner_projected[i], inner_projected[(i + 1) % n], mi])
-	#mi = mean_point(outer_projected)
-	#for i in range(len(outer_projected)):
-	#	triangles.append([outer_projected[i], outer_projected[(i + 1) % n], mi])
-
 	for i in range(n):
 		triangles.append([inner_projected[i], outer_projected[i], inner_projected[(i + 1) % n]])
 		triangles.append([inner_projected[i], outer_projected[i], outer_projected[(i + n - 1) % n]])
 	return triangles
 
-def project_and_meshify_polygon_smart(polygon, r_in, origo, size=2):
-	n = len(polygon)
-	triangles = []
-	mi = mean_point(polygon)
-	for i in range(n):
-		# triangles.append([polygon[i], mi, polygon[(i + 1) % n]]) # Bottom of the pyramid
-		triangles.append([polygon[i], origo, polygon[(i + 1) % n]]) # Sides
-	return triangles
 
 def carve_hole(mesh, ball):
 	shape = Part.Shape()
@@ -119,8 +98,5 @@ if True:
 		shape = Part.makePolygon(asd)
 		Part.show(shape)
 
-triangle = [[-5, -3], [-3, -5], [-3, -3]]
- # mesh = Mesh.Mesh(project_and_meshify_polygon(triangle, r))
- # ball = carve_hole(mesh, ball)
 Part.show(ball)
 Part.show(ballo)
